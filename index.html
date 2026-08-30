@@ -4,7 +4,51 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>부동산인사이트 · 서울 아파트 실거래가 대시보드</title>
+function KakaoMap({ complexes, selectedId, onSelect }) {
+  const mapRef = React.useRef(null);
+  const mapObjRef = React.useRef(null);
+  const markersRef = React.useRef([]);
 
+  // 지도 최초 생성
+  React.useEffect(() => {
+    if (!window.kakao || !mapRef.current) return;
+    const map = new kakao.maps.Map(mapRef.current, {
+      center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울시청 기준
+      level: 8,
+    });
+    mapObjRef.current = map;
+  }, []);
+
+  // 단지 목록이 바뀔 때마다 geocoding 후 마커 다시 그리기
+  React.useEffect(() => {
+    if (!window.kakao || !mapObjRef.current) return;
+    const geocoder = new kakao.maps.services.Geocoder();
+
+    // 기존 마커 제거
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
+
+    complexes.forEach((c) => {
+      const address = `서울 ${c.gu} ${c.dong}`;
+      geocoder.addressSearch(address, (result, status) => {
+        if (status !== kakao.maps.services.Status.OK) return;
+        const { y: lat, x: lng } = result[0];
+        const position = new kakao.maps.LatLng(lat, lng);
+
+        const marker = new kakao.maps.Marker({
+          position,
+          map: mapObjRef.current,
+        });
+
+        kakao.maps.event.addListener(marker, 'click', () => onSelect(c.id));
+        markersRef.current.push(marker);
+      });
+    });
+  }, [complexes]);
+
+  return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
+}
+     
 <!-- Tailwind: 공식 CDN 스크립트(Play CDN). 인터넷 연결이 필요한 유일한 외부 리소스입니다.
      (임의값 클래스(h-[200px] 등)를 그대로 지원하기 때문에 프로토타입에 이 방식을 사용했습니다.) -->
 <script src="https://cdn.tailwindcss.com"></script>
@@ -324,7 +368,7 @@ c,!1,d,e);a[Ja]=b.current;sc(8===a.nodeType?a.parentNode:a);return new Xf(b)};Q.
 var d=null!=c&&c.hydratedSources||null,e=!1,f="",g=aj;null!==c&&void 0!==c&&(!0===c.unstable_strictMode&&(e=!0),void 0!==c.identifierPrefix&&(f=c.identifierPrefix),void 0!==c.onRecoverableError&&(g=c.onRecoverableError));b=Wi(b,null,a,1,null!=c?c:null,e,!1,f,g);a[Ja]=b.current;sc(a);if(d)for(a=0;a<d.length;a++)c=d[a],e=c._getVersion,e=e(c._source),null==b.mutableSourceEagerHydrationData?b.mutableSourceEagerHydrationData=[c,e]:b.mutableSourceEagerHydrationData.push(c,e);return new Ud(b)};Q.render=
 function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmountComponentAtNode=function(a){if(!Vd(a))throw Error(m(40));return a._reactRootContainer?(yb(function(){Wd(null,null,a,!1,function(){a._reactRootContainer=null;a[Ja]=null})}),!0):!1};Q.unstable_batchedUpdates=Tf;Q.unstable_renderSubtreeIntoContainer=function(a,b,c,d){if(!Vd(c))throw Error(m(200));if(null==a||void 0===a._reactInternals)throw Error(m(38));return Wd(a,b,c,!1,d)};Q.version="18.3.1-next-f1338f8080-20240426"});
 })();
-<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_JS_KEY&libraries=services"></script>
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=6a3bf008df84154360b0026b2fcb5908&libraries=services"></script>
 </script>
 <script>
 /* react-is (Recharts 내부 의존성) */
