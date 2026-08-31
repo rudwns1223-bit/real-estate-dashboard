@@ -8,6 +8,7 @@
 <!-- Tailwind: 공식 CDN 스크립트(Play CDN). 인터넷 연결이 필요한 유일한 외부 리소스입니다.
      (임의값 클래스(h-[200px] 등)를 그대로 지원하기 때문에 프로토타입에 이 방식을 사용했습니다.) -->
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=6a3bf008df84154360b0026b2fcb5908&libraries=services"></script>
 
 <style>
   html, body, #root { height: 100%; margin: 0; }
@@ -358,7 +359,9 @@ a.getModuleId)?!0:!1};b.typeOf=c});
 </head>
 <body>
 <div id="root"></div>
-
+<div id="kakao-map-root"></div>
+<div id="naver-news-root"></div>
+     
 <!-- ===================================================================
      아래는 real_estate_dashboard.jsx를 esbuild로 미리 트랜스파일한 결과입니다.
      (JSX → React.createElement 변환을 미리 끝내 두었기 때문에, 브라우저에서
@@ -1324,8 +1327,112 @@ a.getModuleId)?!0:!1};b.typeOf=c});
       /* @__PURE__ */ React.createElement("td", { className: "px-2.5 py-2 text-right font-semibold tabular-nums" }, fmtEok(t.price))
     ))))), /* @__PURE__ */ React.createElement("p", { className: "text-[10px] text-slate-300 mt-2" }, "* \uC704 \uB370\uC774\uD130\uB294 \uD504\uB85C\uD1A0\uD0C0\uC785 \uC2DC\uC5F0\uC744 \uC704\uD55C \uBAA9\uC5C5(Mock) \uB370\uC774\uD130\uC774\uBA70 \uC2E4\uC81C \uC2E4\uAC70\uB798\uAC00\uAC00 \uC544\uB2D9\uB2C8\uB2E4.")))));
   }
+  // ===== 여기부터 새로 추가하는 부분 =====
+
+  function KakaoMapPanel() {
+    const mapBoxRef = React.useRef(null);
+
+    React.useEffect(() => {
+      if (!window.kakao || !window.kakao.maps) {
+        console.error("카카오맵 SDK가 로드되지 않았습니다. <head>의 script 태그와 appkey를 확인하세요.");
+        return;
+      }
+      const map = new window.kakao.maps.Map(mapBoxRef.current, {
+        center: new window.kakao.maps.LatLng(37.5665, 126.9780), // 서울시청 기준
+        level: 8,
+      });
+      const geocoder = new window.kakao.maps.services.Geocoder();
+
+      COMPLEXES.forEach((c) => {
+        geocoder.addressSearch(`서울 ${c.gu} ${c.dong}`, (result, status) => {
+          if (status !== window.kakao.maps.services.Status.OK) return;
+          const pos = new window.kakao.maps.LatLng(result[0].y, result[0].x);
+          const marker = new window.kakao.maps.Marker({ map, position: pos });
+          const info = new window.kakao.maps.InfoWindow({
+            content: `<div style="padding:6px 10px;font-size:12px;white-space:nowrap;">${c.name}<br/>최근 매매가 ${c.recentSale.toFixed(1)}억</div>`,
+          });
+          window.kakao.maps.event.addListener(marker, "mouseover", () => info.open(map, marker));
+          window.kakao.maps.event.addListener(marker, "mouseout", () => info.close());
+        });
+      });
+    }, []);
+
+    return React.createElement(
+      "div",
+      { className: "w-full max-w-[1400px] mx-auto my-6 bg-white border border-slate-200 rounded-xl p-4" },
+      React.createElement("h2", { className: "text-sm font-bold mb-3" }, "\uD83D\uDDFA\uFE0F \uCE74\uCE74\uC624\uB9F5 \uB2E8\uC9C0 \uC704\uCE58"),
+      React.createElement("div", { ref: mapBoxRef, style: { width: "100%", height: "420px", borderRadius: "8px" } })
+    );
+  }
+
+  function NaverNewsPanel() {
+    const [news, setNews] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [updatedAt, setUpdatedAt] = React.useState(null);
+
+    const loadNews = React.useCallback(async () => {
+      try {
+        const res = await fetch("/api/news?query=" + encodeURIComponent("\uBD80\uB3D9\uC0B0 \uC2DC\uC138"));
+        const data = await res.json();
+        setNews(data.items || []);
+        setUpdatedAt(new Date());
+      } catch (e) {
+        console.error("\uB274\uC2A4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4", e);
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+
+    React.useEffect(() => {
+      loadNews();
+      const timer = setInterval(loadNews, 5 * 60 * 1000); // 5\uBD84\uB9C8\uB2E4 \uC790\uB3D9 \uAC31\uC2E0
+      return () => clearInterval(timer);
+    }, [loadNews]);
+
+    const stripTags = (html) => html.replace(/<[^>]+>/g, "");
+
+    return React.createElement(
+      "div",
+      { className: "w-full max-w-[1400px] mx-auto my-6 bg-white border border-slate-200 rounded-xl p-4" },
+      React.createElement(
+        "div",
+        { className: "flex items-center justify-between mb-3" },
+        React.createElement("h2", { className: "text-sm font-bold" }, "\uD83D\uDCF0 \uB124\uC774\uBC84 \uBD80\uB3D9\uC0B0 \uB274\uC2A4 (\uC2E4\uC2DC\uAC04)"),
+        updatedAt && React.createElement("span", { className: "text-[11px] text-slate-400" }, updatedAt.toLocaleTimeString("ko-KR") + " \uAE30\uC900")
+      ),
+      loading
+        ? React.createElement("div", { className: "text-xs text-slate-400" }, "\uBD88\uB7EC\uC624\uB294 \uC911...")
+        : React.createElement(
+            "ul",
+            { className: "space-y-2" },
+            news.length === 0
+              ? React.createElement("li", { className: "text-xs text-slate-400" }, "\uAC80\uC0C9\uB41C \uB274\uC2A4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.")
+              : news.map((item, idx) =>
+                  React.createElement(
+                    "li",
+                    { key: idx, className: "text-xs border-b border-slate-100 pb-2" },
+                    React.createElement(
+                      "a",
+                      { href: item.link, target: "_blank", rel: "noreferrer", className: "text-blue-600 font-medium hover:underline" },
+                      stripTags(item.title)
+                    ),
+                    React.createElement("div", { className: "text-slate-400 mt-0.5" }, item.pubDate)
+                  )
+                )
+          )
+    );
+  }
+
+  // ===== 새로 추가하는 부분 끝 =====
+
   const rootEl = document.getElementById("root");
   ReactDOM.createRoot(rootEl).render(/* @__PURE__ */ React.createElement(RealEstateDashboard, null));
+
+  const kakaoRootEl = document.getElementById("kakao-map-root");
+  if (kakaoRootEl) ReactDOM.createRoot(kakaoRootEl).render(React.createElement(KakaoMapPanel));
+
+  const newsRootEl = document.getElementById("naver-news-root");
+  if (newsRootEl) ReactDOM.createRoot(newsRootEl).render(React.createElement(NaverNewsPanel));
 })();
 
 </script>
