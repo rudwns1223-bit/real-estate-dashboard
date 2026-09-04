@@ -927,25 +927,24 @@ a.getModuleId)?!0:!1};b.typeOf=c});
     const [isMockMode, setIsMockMode] = useState(true);
     const [fetchErrorMsg, setFetchErrorMsg] = useState("");
     const handleSearch = useCallback(async () => {
-      setIsFetching(true);
-      setFetchErrorMsg("");
-      try {
-        const items = await fetchRealEstateData({ lawdCd, dealYmd, serviceKey: apiKey });
-        setRealEstateItems(items);
-        setIsMockMode(false);
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        let friendlyMsg = "\uC2E4\uAC70\uB798\uAC00 \uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD574 \uBAA9\uC5C5 \uB370\uC774\uD130\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4.";
-        if (reason === "NO_API_KEY") friendlyMsg = "API Key\uAC00 \uC785\uB825\uB418\uC9C0 \uC54A\uC544 \uBAA9\uC5C5 \uB370\uC774\uD130\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4.";
-        else if (reason === "INVALID_LAWD_CD") friendlyMsg = "\uBC95\uC815\uB3D9 \uCF54\uB4DC\uB294 5\uC790\uB9AC \uC22B\uC790\uB85C \uC785\uB825\uD574 \uC8FC\uC138\uC694. (\uBAA9\uC5C5 \uB370\uC774\uD130 \uD45C\uC2DC \uC911)";
-        else if (reason === "INVALID_DEAL_YMD") friendlyMsg = "\uACC4\uC57D\uC6D4\uC740 YYYYMM \uD615\uC2DD(\uC608: 202601)\uC73C\uB85C \uC785\uB825\uD574 \uC8FC\uC138\uC694. (\uBAA9\uC5C5 \uB370\uC774\uD130 \uD45C\uC2DC \uC911)";
-        setFetchErrorMsg(friendlyMsg);
-        setRealEstateItems(getMockRealEstateData(lawdCd, dealYmd));
-        setIsMockMode(true);
-      } finally {
-        setIsFetching(false);
-      }
-    }, [lawdCd, dealYmd, apiKey]);
+  setIsFetching(true);
+  setFetchErrorMsg("");
+  try {
+    const items = await fetchRealEstateData({ lawdCd, dealYmd }); // serviceKey 제거
+    setRealEstateItems(items);
+    setIsMockMode(false);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    let friendlyMsg = "실거래가 데이터를 불러오지 못해 목업 데이터로 표시합니다.";
+    if (reason === "INVALID_LAWD_CD") friendlyMsg = "법정동 코드는 5자리 숫자로 입력해 주세요. (목업 데이터 표시 중)";
+    else if (reason === "INVALID_DEAL_YMD") friendlyMsg = "계약월은 YYYYMM 형식(예: 202601)으로 입력해 주세요. (목업 데이터 표시 중)";
+    setFetchErrorMsg(friendlyMsg);
+    setRealEstateItems(getMockRealEstateData(lawdCd, dealYmd));
+    setIsMockMode(true);
+  } finally {
+    setIsFetching(false);
+  }
+}, [lawdCd, dealYmd]); // apiKey 제거
     useEffect(() => {
       handleSearch();
     }, []);
@@ -1333,29 +1332,47 @@ a.getModuleId)?!0:!1};b.typeOf=c});
     const mapBoxRef = React.useRef(null);
 
     React.useEffect(() => {
-      if (!window.kakao || !window.kakao.maps) {
-        console.error("카카오맵 SDK가 로드되지 않았습니다. <head>의 script 태그와 appkey를 확인하세요.");
-        return;
-      }
-      const map = new window.kakao.maps.Map(mapBoxRef.current, {
-        center: new window.kakao.maps.LatLng(37.5665, 126.9780), // 서울시청 기준
-        level: 8,
-      });
-      const geocoder = new window.kakao.maps.services.Geocoder();
+  if (!window.kakao || !window.kakao.maps) {
+    console.error("카카오맵 SDK가 로드되지 않았습니다. <head>의 script 태그와 appkey를 확인하세요.");
+    return;
+  }
+  const map = new window.kakao.maps.Map(mapBoxRef.current, {
+    center: new window.kakao.maps.LatLng(37.5665, 126.9780),
+    level: 8,
+  });
+  const geocoder = new window.kakao.maps.services.Geocoder();
 
-      COMPLEXES.forEach((c) => {
-        geocoder.addressSearch(`서울 ${c.gu} ${c.dong}`, (result, status) => {
-          if (status !== window.kakao.maps.services.Status.OK) return;
-          const pos = new window.kakao.maps.LatLng(result[0].y, result[0].x);
-          const marker = new window.kakao.maps.Marker({ map, position: pos });
-          const info = new window.kakao.maps.InfoWindow({
-            content: `<div style="padding:6px 10px;font-size:12px;white-space:nowrap;">${c.name}<br/>최근 매매가 ${c.recentSale.toFixed(1)}억</div>`,
-          });
-          window.kakao.maps.event.addListener(marker, "mouseover", () => info.open(map, marker));
-          window.kakao.maps.event.addListener(marker, "mouseout", () => info.close());
-        });
-      });
-    }, []);
+  // 좌표를 localStorage에 캐시해서 재방문 시 지오코딩 재호출 방지
+  const CACHE_KEY = "kakao-geocode-cache-v1";
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch (e) { cache = {}; }
+
+  const placeMarker = (c, lat, lng) => {
+    const pos = new window.kakao.maps.LatLng(lat, lng);
+    const marker = new window.kakao.maps.Marker({ map, position: pos });
+    const info = new window.kakao.maps.InfoWindow({
+      content: `<div style="padding:6px 10px;font-size:12px;white-space:nowrap;">${c.name}<br/>최근 매매가 ${c.recentSale.toFixed(1)}억</div>`,
+    });
+    window.kakao.maps.event.addListener(marker, "mouseover", () => info.open(map, marker));
+    window.kakao.maps.event.addListener(marker, "mouseout", () => info.close());
+  };
+
+  COMPLEXES.forEach((c) => {
+    const key = `${c.gu} ${c.dong}`;
+    if (cache[key]) {
+      placeMarker(c, cache[key].lat, cache[key].lng);
+      return;
+    }
+    geocoder.addressSearch(`서울 ${key}`, (result, status) => {
+      if (status !== window.kakao.maps.services.Status.OK) return;
+      const lat = Number(result[0].y);
+      const lng = Number(result[0].x);
+      cache[key] = { lat, lng };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      placeMarker(c, lat, lng);
+    });
+  });
+}, []);
 
     return React.createElement(
       "div",
