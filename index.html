@@ -595,7 +595,7 @@ a.getModuleId)?!0:!1};b.typeOf=c});
   }
   function generateMonthlyLabels(monthsBack) {
     const labels = [];
-    const now = new Date(2026, 7, 1);
+    const now = new Date();
     for (let i = monthsBack - 1; i >= 0; i -= 1) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       labels.push(`${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -620,7 +620,7 @@ a.getModuleId)?!0:!1};b.typeOf=c});
   }
   function generateTransactions(complex) {
     const rows = [];
-    const now = new Date(2026, 7, 1);
+    const now = new Date();
     for (let i = 0; i < 10; i += 1) {
       const unit = complex.unitTypes[i % complex.unitTypes.length];
       const monthsAgo = Math.floor(seededRandom(complex.id * 500 + i) * 24);
